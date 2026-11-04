@@ -1,0 +1,77 @@
+# DRAFT, NOT DEPLOYABLE: image pinned, but public config repo, measurement, host, secrets and spend
+# are open gates.
+# #119's --config-env startup is merged (#190) and tested (macOS, Linux CI); real Tinfoil unverified.
+# This private repo is NOT the Tinfoil config source: copy the reviewed config to the root of a
+# public release repo with Tinfoil's measured-release workflows (README.md). No secret values here.
+# Reviewed against current docs on 2026-11-03; tests check shape/safety, not release readiness.
+# Resolved: template value, not a claim that this is the latest CVM release. Newer cvmimage
+# releases exist (v0.14.17, published 28 Oct, observed 3 Nov); don't bump without checking the
+# pinned SDK's SNP V2 endpoint and a Genoa host first (README, "Official Tinfoil docs").
+# https://github.com/tinfoilsh/tinfoil-containers-template/blob/bae2dd20dd17d5fd7708783ab84e5da296c061cf/tinfoil-config.yml
+cvm-version: "0.14.7"
+cpus: 4          # UNCONFIRMED sizing: does one synthetic engine job fit this shape?
+memory: 16384    # MB; unmeasured. Approx. $0.40/h compute; no confirmed hard dollar cap (README).
+# Resolved: containers have no egress by default; the worker needs witness time before listening.
+# https://docs.tinfoil.sh/containers/config-networking
+networks:
+  worker-egress:
+    egress: allowlist
+    allow:
+      - w1.tryhop.ai
+      - w2.tryhop.ai
+      - w3.tryhop.ai
+      # Source-defined verification proxies of the pinned SDK (tinfoil-rs 0.2.2, e33eea5):
+      # https://github.com/tinfoilsh/tinfoil-rs/blob/e33eea56ebecc9e4bbcd79158ab4d3db534d1e19/src/constants.rs#L7-L21
+      - github-proxy.tinfoil.sh # release digest + attestation fetch (src/verifier/github.rs)
+      - kds-proxy.tinfoil.sh    # AMD VCEK certificates (src/verifier/attestation/sev/cert_chain.rs)
+      # The model router of the founder route (#120; Julius, 3 Nov), founder-model.json's
+      # `tinfoil_router.host`. Its attestation is fetched from the same host. Tinfoil may update
+      # the router and the models behind it; Hop pins neither.
+      - inference.tinfoil.sh
+      # UNCONFIRMED gate: any redirect destinations of the router. Record them on the operator's
+      # synthetic smoke run; never `open`.
+containers:
+  - name: worker
+    # Published by Worker image run 41720716713 from main 01c4648936c0ea316111818f26dec2fb39a28e60
+    # (after #199, #198 and #194). Publication only: not pulled, measured or run on Tinfoil here.
+    # A later change to the Dockerfile's inputs needs a new pin; never substitute an older digest.
+    image: ghcr.io/hop-hq/hop-worker@sha256:efd3446d3174e529bd5d9ca0bf8bb108efd959914de66686f715dc5cd1d728ad
+    # Only a Tinfoil release may listen beyond loopback (#89): the shim reaches this port over
+    # shim-net. The launch JSON arrives unmeasured at deploy (plan: "The circularity"), as the
+    # HOP_WORKER_LAUNCH secret. --config-env (#119) reads the bindings below, writes
+    # private 0600 files in /run/hop, removes the variables before any thread starts, then runs
+    # the unchanged signed-release boot. /tinfoil/config.yml is Tinfoil's YAML, not Hop's JSON.
+    command: ["--config-env", "--listen", "0.0.0.0:8080"]
+    read_only: true
+    # Resolved: restarts an exited process, not a running/unhealthy or hung one. With no
+    # healthcheck, Tinfoil counts the worker ready when its process starts, before witness time.
+    # https://docs.tinfoil.sh/containers/config-runtime#restart-policy
+    restart: always
+    networks: [worker-egress] # Only this worker; never attach a peer to its egress network.
+    # Resolved format (map), uid and mode: https://docs.tinfoil.sh/containers/configuration
+    # UNCONFIRMED capacities/persistence choice: measure one job; these are bounded draft sizes.
+    tmpfs:
+      /data: "size=8g,uid=10001,gid=10001,mode=0700"
+      /tmp: "size=256m,uid=10001,gid=10001,mode=0700"
+      # Credentials only: separate from /data, which boot clears before reading credentials.
+      /run/hop: "size=2m,uid=10001,gid=10001,mode=0700"
+    # Resolved delivery: declared secret names become env vars on deploy/update, not files.
+    # https://docs.tinfoil.sh/containers/secrets-and-env-vars
+    # Names are measured; values are supplied by Julius after measurement and are operational
+    # only. Never a state key, signing private key, user key or plaintext. The dashboard refuses
+    # to deploy while any name below has no value; empty or CLI/API behaviour is undocumented.
+    secrets:
+      - HOP_WORKER_LAUNCH     # release-1/worker-launch.json (signed, public trust material)
+      - HOP_WORKER_ADMISSION  # worker's own admission token
+      # HOP_WITNESS_<n>_TOKEN belongs to launch.witnesses[n-1], by position, never by host
+      # name: the signed digest sorts witnesses, so a reordered launch still verifies and a
+      # token entered by host would go to another witness. Use `hop-release app-release`'s
+      # printed "Tinfoil secret bindings (launch order)" map.
+      - HOP_WITNESS_1_TOKEN
+      - HOP_WITNESS_2_TOKEN
+      - HOP_WITNESS_3_TOKEN
+      - TINFOIL_API_KEY       # inference key; required only for the Tinfoil model route
+shim:
+  upstream-port: 8080
+  paths:
+    - "/v1/*"
