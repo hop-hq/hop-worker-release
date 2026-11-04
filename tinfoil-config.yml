@@ -4,11 +4,10 @@
 # This private repo is NOT the Tinfoil config source: copy the reviewed config to the root of a
 # public release repo with Tinfoil's measured-release workflows (README.md). No secret values here.
 # Reviewed against current docs on 2026-11-03; tests check shape/safety, not release readiness.
-# Resolved: template value, not a claim that this is the latest CVM release. Newer cvmimage
-# releases exist (v0.14.17, published 28 Oct, observed 3 Nov); don't bump without checking the
-# pinned SDK's SNP V2 endpoint and a Genoa host first (README, "Official Tinfoil docs").
-# https://github.com/tinfoilsh/tinfoil-containers-template/blob/bae2dd20dd17d5fd7708783ab84e5da296c061cf/tinfoil-config.yml
-cvm-version: "0.14.7"
+# 0.14.9 fixes private pulls: the container manager reads the boot-written credential directory.
+# https://github.com/tinfoilsh/cvmimage/commit/5cbe07152949366bf103128b12a3aa0c44f92c3c
+# This runtime change requires a new measured release; the worker image below stays pinned.
+cvm-version: "0.14.9"
 cpus: 4          # UNCONFIRMED sizing: does one synthetic engine job fit this shape?
 memory: 16384    # MB; unmeasured. Approx. $0.40/h compute; no confirmed hard dollar cap (README).
 # Resolved: containers have no egress by default; the worker needs witness time before listening.
